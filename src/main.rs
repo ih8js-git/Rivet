@@ -17,6 +17,7 @@ use tokio::{
 
 use crate::{
     api::{
+        channel::get_channel::get_channel,
         guild::get_guild_channels::get_guild_channels,
         message::{create_message::create_message, get_channel_messages::get_channel_messages},
         user::get_current_user_guilds::get_current_user_guilds,
@@ -258,7 +259,7 @@ async fn run_app(token: String) -> Result<(), Error> {
     let tx_api = tx_action.clone();
     let mut rx_shutdown_api = tx_shutdown.subscribe();
 
-    let mut interval = time::interval(Duration::from_secs(1));
+    let mut interval = time::interval(Duration::from_secs(2));
 
     let api_handle: JoinHandle<()> = tokio::spawn(async move {
         match get_current_user_guilds(&api_client, &api_token).await {
@@ -332,7 +333,7 @@ async fn run_app(token: String) -> Result<(), Error> {
             let mut state = app_state.lock().await;
 
             match action {
-                AppAction::InputEscape => match state.state {
+                AppAction::InputEscape => match &state.state {
                     AppState::SelectingGuild => {
                         break;
                     }
@@ -341,10 +342,20 @@ async fn run_app(token: String) -> Result<(), Error> {
                         state.status_message = "Select a server. Use arrows to navigate, Enter to select & Esc to quit".to_string();
                         state.selection_index = 0;
                     }
-                    AppState::Chatting(_) => {
-                        state.state = AppState::SelectingGuild;
-                        state.status_message = "Select a server. Use arrows to navigate, Enter to select & Esc to quit".to_string();
-                        state.selection_index = 0;
+                    AppState::Chatting(channel_id) => {
+                        let channel = get_channel(&client, &token, channel_id).await.unwrap();
+                        match channel.guild_id {
+                            Some(guild_id) => {
+                                state.state = AppState::SelectingChannel(guild_id);
+                                state.status_message = "Select a server. Use arrows to navigate, Enter to select & Esc to quit".to_string();
+                                state.selection_index = 0;
+                            }
+                            None => {
+                                state.state = AppState::SelectingGuild;
+                                state.status_message = "Select a server. Use arrows to navigate, Enter to select & Esc to quit".to_string();
+                                state.selection_index = 0;
+                            }
+                        }
                     }
                 },
                 AppAction::InputChar(c) => {
@@ -380,6 +391,9 @@ async fn run_app(token: String) -> Result<(), Error> {
                 }
                 AppAction::TransitionToChannels(guild_id) => {
                     state.state = AppState::SelectingChannel(guild_id);
+                    state.status_message =
+                        "Select a channel. Use arrows to navigate, Enter to select & Esc to quit"
+                            .to_string();
                     state.selection_index = 0;
                 }
                 AppAction::TransitionToChat(channel_id) => {
@@ -388,6 +402,9 @@ async fn run_app(token: String) -> Result<(), Error> {
                 }
                 AppAction::TransitionToGuilds => {
                     state.state = AppState::SelectingGuild;
+                    state.status_message =
+                        "Select a server. Use arrows to navigate, Enter to select & Esc to quit"
+                            .to_string();
                     state.selection_index = 0;
                 }
             }

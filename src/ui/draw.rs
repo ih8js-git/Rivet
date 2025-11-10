@@ -50,7 +50,14 @@ pub fn draw_ui(f: &mut ratatui::Frame, app: &mut App) {
                 .channels
                 .iter()
                 .filter(|c| c.channel_type != 4)
-                .map(|c| ListItem::new(format!("# {}", c.name)))
+                .map(|c| {
+                    let char = match c.channel_type {
+                        2 => '',
+                        _ => '',
+                    };
+
+                    ListItem::new(format!("{char} {}", c.name))
+                })
                 .collect();
 
             let list = List::new(items)

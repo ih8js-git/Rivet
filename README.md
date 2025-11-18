@@ -21,6 +21,9 @@
 > [!NOTE]
 > A Terminal UI Discord Client in Rust.
 
+> [!NOTE]
+> There are currently no releases, you must compile it yourself until I make a client with enough features to actually drop the binaries.
+
 ### Terms of Service Notice
 >
 > [!WARNING]

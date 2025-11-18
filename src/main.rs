@@ -58,6 +58,7 @@ enum AppState {
 
 #[derive(Debug)]
 pub enum AppAction {
+    SigInt,
     InputChar(char),
     InputBackspace,
     InputEscape,

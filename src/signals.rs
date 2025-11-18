@@ -31,7 +31,7 @@ pub fn restore_terminal() {
 pub fn setup_ctrlc_handler() {
     if let Err(e) = ctrlc::set_handler(move || {
         restore_terminal();
-        process::exit(1);
+        process::exit(130);
     }) {
         eprintln!("Error setting Ctrl-C handler: {e}");
     }

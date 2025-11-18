@@ -5,7 +5,10 @@ use ratatui::{
 };
 use unicode_width::UnicodeWidthStr;
 
-use crate::{App, AppState, UNICODE_EMOJI_DICTIONARY, model::Message};
+use crate::{
+    App, AppState, UNICODE_EMOJI_DICTIONARY,
+    model::{Guild, Message},
+};
 
 pub fn draw_ui(f: &mut ratatui::Frame, app: &mut App) {
     use ratatui::layout::{Constraint, Direction, Layout};
@@ -27,11 +30,21 @@ pub fn draw_ui(f: &mut ratatui::Frame, app: &mut App) {
 
     match &app.state {
         AppState::SelectingGuild => {
-            let items: Vec<ListItem> = app
+            let filter_text = app.input.to_lowercase();
+
+            let filtered_guilds: Vec<&Guild> = app
                 .guilds
+                .iter()
+                .filter(|g| g.name.to_lowercase().contains(&filter_text))
+                .collect();
+
+            let items: Vec<ListItem> = filtered_guilds
                 .iter()
                 .map(|g| ListItem::new(g.name.as_str()))
                 .collect();
+
+            let num_filtered = items.len();
+            app.selection_index = app.selection_index.min(num_filtered.saturating_sub(1));
 
             let list = List::new(items)
                 .block(

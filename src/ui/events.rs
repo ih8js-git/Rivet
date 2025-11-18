@@ -44,11 +44,10 @@ pub async fn handle_input_events(
                                     tx.send(AppAction::SelectNext).await.ok();
                                 }
                                 KeyCode::Char(c) => {
-                                    if c == ':' {
-                                        tx.send(AppAction::SelectEmoji).await.ok();
-                                    } else {
-                                        tx.send(AppAction::InputChar(c)).await.ok();
-                                    }
+                                    match c {
+                                        ':' => tx.send(AppAction::SelectEmoji).await.ok(),
+                                        c => tx.send(AppAction::InputChar(c)).await.ok(),
+                                    };
                                 }
                                 _ => {}
                             }
@@ -346,9 +345,15 @@ pub async fn handle_keys_events(
                 state.selection_index = 0;
             }
         },
-        AppAction::InputChar(c) => match &mut state.state {
-            AppState::EmojiSelection(_) => {
-                state.emoji_filter.push(c);
+        AppAction::InputChar(c) => match &mut state.clone().state {
+            AppState::EmojiSelection(channel_id) => {
+                state.input.push(c);
+                if c == ' ' {
+                    state.state = AppState::Chatting(channel_id.clone());
+                    state.emoji_filter.clear();
+                } else {
+                    state.emoji_filter.push(c);
+                }
                 state.selection_index = 0;
             }
             _ => {

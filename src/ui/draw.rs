@@ -148,8 +148,7 @@ pub fn draw_ui(f: &mut ratatui::Frame, app: &mut App) {
                 let mut lines = vec![];
 
                 let formatted_time = format!(
-                    "[{} {}]",
-                    message.timestamp.split('T').next().unwrap_or(""),
+                    " {}]",
                     message
                         .timestamp
                         .split('T')
@@ -160,6 +159,13 @@ pub fn draw_ui(f: &mut ratatui::Frame, app: &mut App) {
                         .unwrap_or(""),
                 );
 
+                let formatted_date = message
+                    .timestamp
+                    .split('T')
+                    .next()
+                    .unwrap_or("")
+                    .to_string();
+
                 let author = format!(" {}: ", message.author.username);
 
                 let content = message
@@ -168,6 +174,8 @@ pub fn draw_ui(f: &mut ratatui::Frame, app: &mut App) {
                     .unwrap_or("(*non-text*)".to_string());
 
                 lines.push(Line::from(vec![
+                    Span::styled("[".to_string(), Style::default().fg(Color::LightBlue)),
+                    Span::styled(formatted_date, Style::default().fg(Color::LightCyan)),
                     Span::styled(formatted_time, Style::default().fg(Color::LightBlue)),
                     Span::styled(author, Style::default().fg(Color::Yellow)),
                     Span::styled(content, Style::default().fg(Color::White)),

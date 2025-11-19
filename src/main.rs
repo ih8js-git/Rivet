@@ -16,16 +16,16 @@ use tokio::{
 };
 
 use crate::{
-    api::{get_channel_messages, get_current_user_guilds},
-    model::{Channel, Emoji, Guild, Message},
+    api::{ApiClient, Channel, Emoji, Guild, Message},
     signals::{restore_terminal, setup_ctrlc_handler},
     ui::{draw_ui, handle_input_events, handle_keys_events},
 };
 
 mod api;
-mod model;
 mod signals;
 mod ui;
+
+const DISCORD_BASE_URL: &str = "https://discord.com/api/v10";
 
 pub type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 
@@ -64,6 +64,7 @@ pub enum AppAction {
 
 #[derive(Debug, Clone)]
 pub struct App {
+    api_client: ApiClient,
     state: AppState,
     guilds: Vec<Guild>,
     channels: Vec<Channel>,
@@ -103,9 +104,8 @@ async fn run_app(token: String) -> Result<(), Error> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let client = Client::new();
-
     let app_state = Arc::new(Mutex::new(App {
+        api_client: ApiClient::new(Client::new(), token.clone(), DISCORD_BASE_URL.to_string()),
         state: AppState::SelectingGuild,
         guilds: Vec::new(),
         channels: Vec::new(),
@@ -135,22 +135,21 @@ async fn run_app(token: String) -> Result<(), Error> {
     });
 
     let api_state = Arc::clone(&app_state);
-    let api_client = client.clone();
-    let api_token = token.clone();
     let tx_api = tx_action.clone();
     let mut rx_shutdown_api = tx_shutdown.subscribe();
 
     let mut interval = time::interval(Duration::from_secs(2));
 
     let api_handle: JoinHandle<()> = tokio::spawn(async move {
-        match get_current_user_guilds(&api_client, &api_token).await {
+        let mut state = api_state.lock().await;
+        match state.api_client.get_current_user_guilds().await {
             Ok(guilds) => {
                 if let Err(e) = tx_api.send(AppAction::ApiUpdateGuilds(guilds)).await {
                     eprintln!("Failed to send guild update action: {e}");
                 }
             }
             Err(e) => {
-                api_state.lock().await.status_message = format!("Failed to load servers. {e}");
+                state.status_message = format!("Failed to load servers. {e}");
             }
         }
 
@@ -172,10 +171,8 @@ async fn run_app(token: String) -> Result<(), Error> {
                     if let Some(channel_id) = current_channel_id {
                         const MESSAGE_LIMIT: usize = 100;
 
-                        match get_channel_messages(
-                            &api_client,
+                        match state.api_client.get_channel_messages(
                             &channel_id,
-                            &api_token,
                             None,
                             None,
                             None,
@@ -211,8 +208,7 @@ async fn run_app(token: String) -> Result<(), Error> {
         if let Some(action) = rx_action.recv().await {
             let state = app_state.lock().await;
 
-            match handle_keys_events(state, action, &client, token.clone(), tx_action.clone()).await
-            {
+            match handle_keys_events(state, action, tx_action.clone()).await {
                 Some(KeywordAction::Continue) => continue,
                 Some(KeywordAction::Break) => break,
                 None => {}

@@ -7,7 +7,7 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::{
     App, AppState,
-    model::{Emoji, Guild, Message},
+    api::{Emoji, Guild, Message},
 };
 
 pub fn draw_ui(f: &mut ratatui::Frame, app: &mut App) {

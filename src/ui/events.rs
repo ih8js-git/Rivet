@@ -86,14 +86,10 @@ async fn input_submit(
             state.input = String::new();
             state.status_message = format!("Loading channels for {selected_guild_name}...");
 
-            let state_clone = state.clone();
+            let api_client_clone = state.api_client.clone();
 
             tokio::spawn(async move {
-                match state_clone
-                    .api_client
-                    .get_guild_channels(&guild_id_clone)
-                    .await
-                {
+                match api_client_clone.get_guild_channels(&guild_id_clone).await {
                     Ok(channels) => {
                         tx_clone
                             .send(AppAction::ApiUpdateChannel(channels))
@@ -104,11 +100,7 @@ async fn input_submit(
                         eprintln!("Failed to load channels: {e}");
                     }
                 }
-                match state_clone
-                    .api_client
-                    .get_guild_emojis(&guild_id_clone)
-                    .await
-                {
+                match api_client_clone.get_guild_emojis(&guild_id_clone).await {
                     Ok(emojis) => {
                         tx_clone.send(AppAction::ApiUpdateEmojis(emojis)).await.ok();
                     }
@@ -203,11 +195,10 @@ async fn input_submit(
             };
 
             if let Some((channel_id_clone, content)) = message_data {
-                let state_clone = state.clone();
+                let api_client_clone = state.api_client.clone();
 
                 tokio::spawn(async move {
-                    match state_clone
-                        .api_client
+                    match api_client_clone
                         .create_message(&channel_id_clone, Some(content), false)
                         .await
                     {

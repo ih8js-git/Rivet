@@ -1,4 +1,5 @@
 pub mod channel;
+pub mod dm;
 pub mod emoji;
 pub mod guild;
 pub mod message;

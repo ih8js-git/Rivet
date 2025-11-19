@@ -16,7 +16,7 @@ use tokio::{
 };
 
 use crate::{
-    api::{ApiClient, Channel, Emoji, Guild, Message},
+    api::{ApiClient, Channel, Emoji, Guild, Message, dm::DM},
     signals::{restore_terminal, setup_ctrlc_handler},
     ui::{draw_ui, handle_input_events, handle_keys_events},
 };
@@ -37,7 +37,9 @@ pub enum KeywordAction {
 
 #[derive(Debug, Clone)]
 enum AppState {
+    Home,
     SelectingGuild,
+    SelectingDM,
     SelectingChannel(String),
     Chatting(String),
     EmojiSelection(String),
@@ -56,6 +58,7 @@ pub enum AppAction {
     ApiUpdateChannel(Vec<Channel>),
     ApiUpdateEmojis(Vec<Emoji>),
     ApiUpdateGuilds(Vec<Guild>),
+    ApiUpdateDMs(Vec<DM>),
     TransitionToChat(String),
     TransitionToChannels(String),
     TransitionToGuilds,
@@ -106,7 +109,7 @@ async fn run_app(token: String) -> Result<(), Error> {
 
     let app_state = Arc::new(Mutex::new(App {
         api_client: ApiClient::new(Client::new(), token.clone(), DISCORD_BASE_URL.to_string()),
-        state: AppState::SelectingGuild,
+        state: AppState::Home,
         guilds: Vec::new(),
         channels: Vec::new(),
         messages: Vec::new(),

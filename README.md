@@ -93,6 +93,10 @@ DISCORD_TOKEN="your-token-here" cargo run --release
 ```bash
 cargo run --release
 ```
+or 
+```env
+DISCORD_TOKEN="your-token-here" cargo run --release
+```
 
 ## Licence
 

@@ -167,7 +167,8 @@ pub fn draw_ui(f: &mut ratatui::Frame, app: &mut App) {
                             "Rivet Client - Guilds",
                             Style::default().fg(Color::Yellow),
                         ))
-                        .borders(Borders::ALL),
+                        .borders(Borders::ALL)
+                        .border_type(BorderType::Double),
                 )
                 .highlight_style(Style::default().reversed())
                 .highlight_symbol(">> ");

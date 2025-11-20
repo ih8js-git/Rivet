@@ -50,15 +50,7 @@ pub fn draw_ui(f: &mut ratatui::Frame, app: &mut App) {
 
             let loading_paragraph = Paragraph::new(Text::from(vec![loading_text]))
                 .alignment(ratatui::layout::Alignment::Center)
-                .block(
-                    Block::default()
-                        .title(Span::styled(
-                            "Rivet Client",
-                            Style::default().fg(Color::Yellow),
-                        ))
-                        .borders(Borders::ALL)
-                        .border_type(BorderType::Double),
-                );
+                .block(Block::default().borders(Borders::NONE));
 
             f.render_widget(Clear, chunks[0]);
             f.render_widget(loading_paragraph, loading_area);
@@ -75,8 +67,12 @@ pub fn draw_ui(f: &mut ratatui::Frame, app: &mut App) {
             let list = List::new(items)
                 .block(
                     Block::default()
-                        .title("Rivet Client - Home")
-                        .borders(Borders::ALL),
+                        .title(Span::styled(
+                            "Rivet Client - Home",
+                            Style::default().fg(Color::Yellow),
+                        ))
+                        .borders(Borders::ALL)
+                        .border_type(BorderType::Double),
                 )
                 .highlight_style(Style::default().reversed())
                 .highlight_symbol(">> ");
@@ -98,7 +94,22 @@ pub fn draw_ui(f: &mut ratatui::Frame, app: &mut App) {
 
             let items: Vec<ListItem> = filtered_dms
                 .iter()
-                .map(|d| ListItem::new(d.get_name()))
+                .map(|d| {
+                    let char = match d.channel_type {
+                        1 => '',
+                        3 => '',
+                        _ => '',
+                    };
+
+                    let color = match d.channel_type {
+                        1 => Color::LightMagenta,
+                        3 => Color::LightBlue,
+                        _ => Color::LightRed,
+                    };
+
+                    ListItem::new(format!("{char} {}", d.get_name()))
+                        .style(Style::default().fg(color))
+                })
                 .collect();
 
             let num_filtered = items.len();
@@ -107,8 +118,12 @@ pub fn draw_ui(f: &mut ratatui::Frame, app: &mut App) {
             let list = List::new(items)
                 .block(
                     Block::default()
-                        .title("Rivet Client - Direct Messages")
-                        .borders(Borders::ALL),
+                        .title(Span::styled(
+                            "Rivet Client - Direct Messages",
+                            Style::default().fg(Color::Yellow),
+                        ))
+                        .borders(Borders::ALL)
+                        .border_type(BorderType::Double),
                 )
                 .highlight_style(Style::default().reversed())
                 .highlight_symbol(">> ");
@@ -126,9 +141,20 @@ pub fn draw_ui(f: &mut ratatui::Frame, app: &mut App) {
                 .filter(|g| g.name.to_lowercase().contains(&filter_text))
                 .collect();
 
+            let mut count = 0;
             let items: Vec<ListItem> = filtered_guilds
                 .iter()
-                .map(|g| ListItem::new(g.name.as_str()))
+                .map(|g| {
+                    let color = if count % 2 == 0 {
+                        Color::LightCyan
+                    } else {
+                        Color::LightYellow
+                    };
+
+                    count += 1;
+
+                    ListItem::new(g.name.as_str()).style(Style::default().fg(color))
+                })
                 .collect();
 
             let num_filtered = items.len();
@@ -137,7 +163,10 @@ pub fn draw_ui(f: &mut ratatui::Frame, app: &mut App) {
             let list = List::new(items)
                 .block(
                     Block::default()
-                        .title("Servers (Guilds)")
+                        .title(Span::styled(
+                            "Rivet Client - Guilds",
+                            Style::default().fg(Color::Yellow),
+                        ))
                         .borders(Borders::ALL),
                 )
                 .highlight_style(Style::default().reversed())
@@ -162,7 +191,13 @@ pub fn draw_ui(f: &mut ratatui::Frame, app: &mut App) {
                         _ => '',
                     };
 
-                    ListItem::new(format!("{char} {}", c.name))
+                    let color = match c.channel_type {
+                        2 => Color::LightCyan,
+                        0 => Color::LightBlue,
+                        _ => Color::LightMagenta,
+                    };
+
+                    ListItem::new(format!("{char} {}", c.name)).style(Style::default().fg(color))
                 })
                 .collect();
 
@@ -170,7 +205,12 @@ pub fn draw_ui(f: &mut ratatui::Frame, app: &mut App) {
             app.selection_index = app.selection_index.min(num_filtered.saturating_sub(1));
 
             let list = List::new(items)
-                .block(Block::default().title(title).borders(Borders::ALL))
+                .block(
+                    Block::default()
+                        .title(Span::styled(title, Style::default().fg(Color::Yellow)))
+                        .borders(Borders::ALL)
+                        .border_type(BorderType::Double),
+                )
                 .highlight_style(Style::default().reversed())
                 .highlight_symbol(">> ");
 
@@ -283,8 +323,12 @@ pub fn draw_ui(f: &mut ratatui::Frame, app: &mut App) {
             let paragraph = Paragraph::new(final_content)
                 .block(
                     Block::default()
-                        .title("Rivet Client (Esc to return to Servers")
-                        .borders(Borders::ALL),
+                        .title(Span::styled(
+                            "Rivet Client - Chatting",
+                            Style::default().fg(Color::Yellow),
+                        ))
+                        .borders(Borders::ALL)
+                        .border_type(BorderType::Double),
                 )
                 .wrap(Wrap { trim: false })
                 .scroll((scroll_offset as u16, 0));
@@ -347,7 +391,15 @@ pub fn draw_ui(f: &mut ratatui::Frame, app: &mut App) {
                 .min(filtered_items.len().saturating_sub(1));
 
             let emoji_list = List::new(filtered_items)
-                .block(Block::default().title("Select Emoji").borders(Borders::ALL))
+                .block(
+                    Block::default()
+                        .title(Span::styled(
+                            "Select An Emoji",
+                            Style::default().fg(Color::Yellow),
+                        ))
+                        .borders(Borders::ALL)
+                        .border_type(BorderType::Double),
+                )
                 .highlight_style(Style::default().reversed())
                 .highlight_symbol(">> ");
 
@@ -361,8 +413,12 @@ pub fn draw_ui(f: &mut ratatui::Frame, app: &mut App) {
     f.render_widget(
         Paragraph::new(app.input.as_str()).block(
             Block::default()
-                .title(format!("Input: {}", app.status_message))
-                .borders(Borders::ALL),
+                .title(Span::styled(
+                    format!("Input: {}", app.status_message),
+                    Style::default().fg(Color::Yellow),
+                ))
+                .borders(Borders::ALL)
+                .border_type(BorderType::Double),
         ),
         chunks[1],
     );

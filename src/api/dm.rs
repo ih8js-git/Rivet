@@ -8,6 +8,8 @@ use crate::{
 #[derive(Debug, Deserialize, Clone)]
 pub struct DM {
     pub id: String,
+    #[serde(rename = "type")]
+    pub channel_type: u8,
     pub recipients: Vec<User>,
 }
 

@@ -16,7 +16,7 @@ use tokio::{
 };
 
 use crate::{
-    api::{ApiClient, Channel, Emoji, Guild, Message, dm::DM},
+    api::{ApiClient, Channel, Emoji, Guild, Message, channel::PermissionContext, dm::DM},
     signals::{restore_terminal, setup_ctrlc_handler},
     ui::{draw_ui, handle_input_events, handle_keys_events},
 };
@@ -69,6 +69,7 @@ pub enum AppAction {
     ApiUpdateEmojis(Vec<Emoji>),
     ApiUpdateGuilds(Vec<Guild>),
     ApiUpdateDMs(Vec<DM>),
+    ApiUpdateContext(Option<PermissionContext>),
     TransitionToChat(String),
     TransitionToChannels(String),
     TransitionToGuilds,
@@ -97,6 +98,7 @@ pub struct App {
     emoji_map: Vec<(String, String)>,
     emoji_filter: String,
     tick_count: usize,
+    context: Option<PermissionContext>,
 }
 
 impl App {
@@ -142,6 +144,7 @@ async fn run_app(token: String) -> Result<(), Error> {
         emoji_map: App::load_emoji_map("emojis.json"),
         emoji_filter: String::new(),
         tick_count: 0,
+        context: None,
     }));
 
     let (tx_action, mut rx_action) = mpsc::channel::<AppAction>(32);
@@ -154,7 +157,7 @@ async fn run_app(token: String) -> Result<(), Error> {
     let tx_ticker = tx_action.clone();
 
     let ticker_handle: JoinHandle<()> = tokio::spawn(async move {
-        let mut interval = time::interval(Duration::from_millis(100)); // 10 ticks per second for smooth animation
+        let mut interval = time::interval(Duration::from_millis(100));
         loop {
             tokio::select! {
                 _ = rx_shutdown_ticker.recv() => {

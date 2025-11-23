@@ -15,7 +15,13 @@ pub use message::Message;
 use serde::de::DeserializeOwned;
 pub use user::User;
 
-use crate::Error;
+use crate::{
+    Error,
+    api::{
+        channel::{PermissionContext, Role},
+        guild::GuildMember,
+    },
+};
 
 #[derive(Debug, Clone)]
 pub struct ApiClient {
@@ -63,6 +69,10 @@ impl ApiClient {
         }
     }
 
+    pub async fn get_current_user(&self) -> Result<User, Error> {
+        self.api_request("users/@me", Method::GET, None).await
+    }
+
     pub async fn get_channel(&self, channel_id: &str) -> Result<Channel, Error> {
         self.api_request(format!("channels/{channel_id}").as_str(), Method::GET, None)
             .await
@@ -89,6 +99,44 @@ impl ApiClient {
             None,
         )
         .await
+    }
+
+    pub async fn get_guild_roles(&self, guild_id: &str) -> Result<Vec<Role>, Error> {
+        self.api_request(
+            format!("guilds/{guild_id}/roles").as_str(),
+            Method::GET,
+            None,
+        )
+        .await
+    }
+
+    pub async fn get_guild_member(&self, guild_id: &str) -> Result<GuildMember, Error> {
+        let user = self.get_current_user().await?;
+        self.api_request(
+            format!("guilds/{guild_id}/members/{}", user.id).as_str(),
+            Method::GET,
+            None,
+        )
+        .await
+    }
+
+    pub async fn get_permission_context(&self, guild_id: &str) -> Result<PermissionContext, Error> {
+        let all_guild_roles: Vec<Role> = self.get_guild_roles(guild_id).await?;
+        let member_info: GuildMember = self.get_guild_member(guild_id).await?;
+
+        Ok(PermissionContext {
+            user_id: member_info.user.id,
+            user_role_ids: {
+                let everyone_role_id = guild_id.to_string();
+                let mut roles = member_info.roles;
+                if !roles.contains(&everyone_role_id) {
+                    roles.push(everyone_role_id.clone());
+                }
+                roles
+            },
+            all_guild_roles,
+            everyone_role_id: guild_id.to_string(),
+        })
     }
 
     pub async fn create_message(

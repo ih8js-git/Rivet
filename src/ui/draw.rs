@@ -182,10 +182,18 @@ pub fn draw_ui(f: &mut ratatui::Frame, app: &mut App) {
 
             let filter_text = app.input.to_lowercase();
 
-            let items: Vec<ListItem> = app
+            let permission_context = &app.context;
+
+            let mut items: Vec<ListItem> = app
                 .channels
                 .iter()
-                .filter(|c| c.channel_type != 4 && c.name.to_lowercase().contains(&filter_text))
+                .filter(|c| {
+                    let mut readable = false;
+                    if let Some(context) = &permission_context {
+                        readable = c.is_readable(context)
+                    }
+                    readable && c.name.to_lowercase().contains(&filter_text)
+                })
                 .map(|c| {
                     let char = match c.channel_type {
                         2 => '',
@@ -204,6 +212,32 @@ pub fn draw_ui(f: &mut ratatui::Frame, app: &mut App) {
 
             let num_filtered = items.len();
             app.selection_index = app.selection_index.min(num_filtered.saturating_sub(1));
+
+            let hidden_items: Vec<ListItem> = app
+                .channels
+                .iter()
+                .filter(|c| {
+                    if let Some(context) = &permission_context {
+                        !c.is_readable(context)
+                    } else {
+                        false
+                    }
+                })
+                .map(|c| {
+                    let char = match c.channel_type {
+                        2 => '',
+                        _ => '',
+                    };
+
+                    let color = Color::DarkGray;
+
+                    ListItem::new(format!("{char} {}", c.name)).style(Style::default().fg(color))
+                })
+                .collect();
+
+            for item in hidden_items {
+                items.push(item);
+            }
 
             let list = List::new(items)
                 .block(

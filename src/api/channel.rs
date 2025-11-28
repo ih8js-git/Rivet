@@ -1,5 +1,7 @@
 use serde::Deserialize;
 
+use crate::Error;
+
 const VIEW_CHANNEL_PERMISSION: u64 = 1 << 10;
 
 #[derive(Debug, Deserialize, Clone)]
@@ -32,8 +34,10 @@ pub struct Channel {
     #[serde(rename = "type")]
     pub channel_type: u8,
     pub guild_id: Option<String>,
+    pub parent_id: Option<String>,
     #[serde(default)]
     pub permission_overwrites: Vec<Overwrite>,
+    pub children: Option<Vec<Channel>>,
 }
 
 fn parse_permission_string(hex_string: &str) -> u64 {
@@ -125,11 +129,42 @@ impl Channel {
     }
 
     pub fn is_readable(&self, context: &PermissionContext) -> bool {
-        if self.channel_type == 4 {
-            return false;
-        }
-
         let permissions = self.calculate_permissions(context);
         (permissions & VIEW_CHANNEL_PERMISSION) != 0
+    }
+
+    pub fn filter_channels_by_categories(channels: Vec<Self>) -> Result<Vec<Self>, Error> {
+        if channels.is_empty() {
+            return Err("Error: channels must not be empty.".into());
+        }
+
+        let mut final_categories: Vec<Self> = Vec::new();
+
+        let categories: Vec<&Channel> = channels.iter().filter(|c| c.channel_type == 4).collect();
+
+        for category in categories {
+            let channels_to_push: Vec<Channel> = channels
+                .clone()
+                .into_iter()
+                .filter(|c| c.parent_id.clone().is_some_and(|pid| pid == category.id))
+                .collect();
+            final_categories.push(Self {
+                id: category.id.clone(),
+                name: category.name.clone(),
+                guild_id: category.guild_id.clone(),
+                parent_id: None,
+                channel_type: 4,
+                children: Some(channels_to_push),
+                permission_overwrites: category.permission_overwrites.clone(),
+            });
+        }
+
+        let without_categories = channels
+            .iter()
+            .filter(|c| c.channel_type != 4 && c.parent_id.is_none())
+            .cloned()
+            .collect::<Vec<Channel>>();
+
+        Ok([final_categories, without_categories].concat())
     }
 }

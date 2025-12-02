@@ -156,6 +156,7 @@ jobs:
         run: |
           git add Cargo.toml
           git commit -m "[RELEASE] Bump bersion to ${{ steps.version_extract.outputs.VERSION }} before publishing"
+          git push
 
       - run: cargo publish
         env:

@@ -236,6 +236,7 @@ jobs:
               pacman-key --populate archlinux && \
               pacman -Syu --noconfirm base-devel && \
               useradd -m builder && \
+              chown -R builder:builder /app && \
               su - builder -c 'cd /app && makepkg --printsrcinfo > .SRCINFO'"
         shell: bash
 

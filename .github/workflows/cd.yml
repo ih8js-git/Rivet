@@ -169,6 +169,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Extract Git Tag version
+        id: version_extract
+        run: echo "VERSION=$(echo ${{ github.ref_name }} | sed 's/^v//')" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Update PKGBUILD
+        run: |
+          sed -i "s/^pkgver=.*/pkgver=${{ steps.version_extract.outputs.VERSION }}/" PKGBUILD
+
+          sed -i "s/^pkgrel=.*/pkgrel=1/" PKGBUILD
+
+          sed -i "s/^sha256sums=.*/sha256sums=('SKIP')/" PKGBUILD
+
       - name: Builder Docker Image & Run makepkg
         run: |
           docker build --file Dockerfile.arch --tag rivetui-makepkg-check:latest .

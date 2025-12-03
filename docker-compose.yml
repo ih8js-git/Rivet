@@ -2,7 +2,7 @@ services:
   aur:
     build:
       context: .
-      dockerfile: Dockerfile.dev
+      dockerfile: dev.Dockerfile
     restart: on-failure
     env_file:
       - ./.env

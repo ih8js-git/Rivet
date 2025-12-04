@@ -23,6 +23,7 @@
 
 - [About](#about)
   - [Terms of Service Notice](#terms-of-service-notice)
+- [Installation (AUR)](#installation-aur)
 - [Installation (Binaries)](#installation-binaries)
 - [Installation (Cargo)](#installation-cargo)
   - [Dependencies](#dependencies)

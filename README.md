@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://aur.archlinux.org/packages/rivetui">
-    <img src="https://img.shields.io/aur/version/rivetui?style=for-the-badge&logo=Arch-Linux&logoColor=white&color=1793D1"></a> 
+    <img src="https://img.shields.io/aur/version/rivetui?style=for-the-badge&logo=Arch-Linux&logoColor=white&color=1793D1"></a>
   <a href="https://crates.io/crates/rivetui">
     <img src="https://img.shields.io/crates/v/rivetui?style=for-the-badge&logo=rust&logoColor=white&color=FF4E00"></a>
   <a href="https://crates.io/crates/rivetui">
@@ -65,6 +65,8 @@ The developers, contributors, and maintainers of this repository disclaim all li
 
 ```bash
 yay -S rivetui
+# or
+yay -S rivetui-git
 ```
 
 ## Installation (Binaries)
@@ -133,7 +135,9 @@ DISCORD_TOKEN="your-token-here" rivetui
 ```bash
 rivetui
 ```
-or 
+
+or
+
 ```env
 DISCORD_TOKEN="your-token-here" rivetui
 ```

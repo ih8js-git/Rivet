@@ -461,13 +461,13 @@ fn clamp_cursor(state: &mut MutexGuard<'_, App>) {
     }
 }
 
-fn move_cursor_word_forward(state: &mut MutexGuard<'_, App>) {
+fn move_cursor_word_forward(state: &MutexGuard<'_, App>) -> usize {
     let input = &state.input;
     let len = input.len();
     let mut pos = state.cursor_position;
 
     if pos >= len {
-        return;
+        return pos;
     }
 
     // If on a space, skip spaces
@@ -485,16 +485,15 @@ fn move_cursor_word_forward(state: &mut MutexGuard<'_, App>) {
         pos += 1;
     }
 
-    state.cursor_position = pos;
-    clamp_cursor(state);
+    pos.min(len)
 }
 
-fn move_cursor_word_backward(state: &mut MutexGuard<'_, App>) {
+fn move_cursor_word_backward(state: &MutexGuard<'_, App>) -> usize {
     let input = &state.input;
     let mut pos = state.cursor_position;
 
     if pos == 0 {
-        return;
+        return 0;
     }
 
     // Move back one char to start checking
@@ -510,7 +509,7 @@ fn move_cursor_word_backward(state: &mut MutexGuard<'_, App>) {
         pos -= 1;
     }
 
-    state.cursor_position = pos;
+    pos
 }
 
 pub async fn handle_keys_events(
@@ -533,6 +532,13 @@ pub async fn handle_keys_events(
         .collect();
 
     let total_filtered_emojis = filtered_unicode.len() + filtered_custom.len();
+
+    // Check for timeout
+    if let Some(start_time) = state.last_command_time.checked_add(state.command_timeout) {
+        if std::time::Instant::now() > start_time {
+            state.pending_command = None;
+        }
+    }
 
     match action {
         AppAction::SigInt => return Some(KeywordAction::Break),
@@ -618,15 +624,44 @@ pub async fn handle_keys_events(
                     }
                 }
                 'w' => {
-                    move_cursor_word_forward(&mut state);
+                    if let Some('d') = state.pending_command {
+                        let start = state.cursor_position;
+                        let end = move_cursor_word_forward(&state);
+                        if end > start {
+                            state.input.drain(start..end);
+                        }
+                        state.pending_command = None;
+                    } else {
+                        state.cursor_position = move_cursor_word_forward(&state);
+                        clamp_cursor(&mut state);
+                    }
                 }
                 'b' => {
-                    move_cursor_word_backward(&mut state);
+                    if let Some('d') = state.pending_command {
+                        let end = state.cursor_position;
+                        let start = move_cursor_word_backward(&state);
+                        if end > start {
+                            state.input.drain(start..end);
+                            state.cursor_position = start;
+                        }
+                        state.pending_command = None;
+                    } else {
+                        state.cursor_position = move_cursor_word_backward(&state);
+                    }
                 }
-                ':' => {
-                    tx_action.send(AppAction::SelectEmoji).await.ok();
+                'd' => {
+                    if let Some('d') = state.pending_command {
+                        state.input.clear();
+                        state.cursor_position = 0;
+                        state.pending_command = None;
+                    } else {
+                        state.pending_command = Some('d');
+                        state.last_command_time = std::time::Instant::now();
+                    }
                 }
-                _ => {}
+                _ => {
+                    state.pending_command = None;
+                }
             },
             InputMode::Insert => {
                 let current_state = state.state.clone();

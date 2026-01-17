@@ -1,4 +1,10 @@
-use std::{env, io, path::PathBuf, process, sync::Arc};
+use std::{
+    env, io,
+    path::PathBuf,
+    process,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use crossterm::{
     cursor::SetCursorStyle,
@@ -13,7 +19,7 @@ use tokio::{
         mpsc::{self},
     },
     task::JoinHandle,
-    time::{self, Duration},
+    time::{self},
 };
 
 use crate::{
@@ -109,6 +115,9 @@ pub struct App {
     context: Option<PermissionContext>,
     mode: InputMode,
     cursor_position: usize,
+    pending_command: Option<char>,
+    last_command_time: Instant,
+    command_timeout: Duration,
 }
 
 impl App {
@@ -200,6 +209,9 @@ async fn run_app(token: String) -> Result<(), Error> {
         context: None,
         mode: InputMode::Normal,
         cursor_position: 0,
+        pending_command: None,
+        last_command_time: Instant::now(),
+        command_timeout: Duration::from_secs(1),
     }));
 
     let (tx_action, mut rx_action) = mpsc::channel::<AppAction>(32);

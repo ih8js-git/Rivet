@@ -7,7 +7,7 @@ use tokio::{
 };
 
 use crate::{
-    App, AppAction, AppState, KeywordAction, Window,
+    App, AppAction, AppState, InputMode, KeywordAction, Window,
     api::{Channel, DM, Emoji, Guild},
 };
 
@@ -462,60 +462,83 @@ pub async fn handle_keys_events(
 
     match action {
         AppAction::SigInt => return Some(KeywordAction::Break),
-        AppAction::InputEscape => match &state.state {
-            AppState::Home | AppState::Loading(_) => return Some(KeywordAction::Break),
-            AppState::SelectingDM => {
-                tx_action.send(AppAction::TransitionToHome).await.ok();
+        AppAction::InputEscape => {
+            if state.mode == InputMode::Insert {
+                state.mode = InputMode::Normal;
+                return None;
             }
-            AppState::SelectingGuild => {
-                tx_action.send(AppAction::TransitionToHome).await.ok();
-            }
-            AppState::SelectingChannel(_) => {
-                tx_action.send(AppAction::TransitionToGuilds).await.ok();
-            }
-            AppState::Chatting(channel_id) => {
-                let channel = match state.api_client.get_channel(&channel_id.clone()).await {
-                    Ok(c) => c,
-                    Err(e) => {
-                        tx_action.send(AppAction::TransitionToHome).await.ok();
-                        state.status_message = format!("{e}");
-                        return None;
-                    }
-                };
-
-                if channel.channel_type == 1 || channel.channel_type == 3 {
-                    tx_action.send(AppAction::TransitionToDM).await.ok();
-                } else {
-                    match channel.guild_id {
-                        Some(guild_id) => tx_action
-                            .send(AppAction::TransitionToChannels(guild_id.clone()))
-                            .await
-                            .ok(),
-                        None => tx_action.send(AppAction::TransitionToGuilds).await.ok(),
+            match &state.state {
+                AppState::Home | AppState::Loading(_) => return Some(KeywordAction::Break),
+                AppState::SelectingDM => {
+                    tx_action.send(AppAction::TransitionToHome).await.ok();
+                }
+                AppState::SelectingGuild => {
+                    tx_action.send(AppAction::TransitionToHome).await.ok();
+                }
+                AppState::SelectingChannel(_) => {
+                    tx_action.send(AppAction::TransitionToGuilds).await.ok();
+                }
+                AppState::Chatting(channel_id) => {
+                    let channel = match state.api_client.get_channel(&channel_id.clone()).await {
+                        Ok(c) => c,
+                        Err(e) => {
+                            tx_action.send(AppAction::TransitionToHome).await.ok();
+                            state.status_message = format!("{e}");
+                            return None;
+                        }
                     };
+
+                    if channel.channel_type == 1 || channel.channel_type == 3 {
+                        tx_action.send(AppAction::TransitionToDM).await.ok();
+                    } else {
+                        match channel.guild_id {
+                            Some(guild_id) => tx_action
+                                .send(AppAction::TransitionToChannels(guild_id.clone()))
+                                .await
+                                .ok(),
+                            None => tx_action.send(AppAction::TransitionToGuilds).await.ok(),
+                        };
+                    }
+                }
+                AppState::EmojiSelection(channel_id) => {
+                    tx_action
+                        .send(AppAction::TransitionToChat(channel_id.clone()))
+                        .await
+                        .ok();
                 }
             }
-            AppState::EmojiSelection(channel_id) => {
-                tx_action
-                    .send(AppAction::TransitionToChat(channel_id.clone()))
-                    .await
-                    .ok();
-            }
-        },
-        AppAction::InputChar(c) => match &mut state.clone().state {
-            AppState::EmojiSelection(channel_id) => {
-                state.input.push(c);
-                if c == ' ' {
-                    state.state = AppState::Chatting(channel_id.clone());
-                    state.emoji_filter.clear();
-                } else {
-                    state.emoji_filter.push(c);
+        }
+        AppAction::InputChar(c) => match state.mode {
+            InputMode::Normal => match c {
+                'i' => {
+                    state.mode = InputMode::Insert;
                 }
-                state.selection_index = 0;
-            }
-            _ => {
-                state.input.push(c);
-            }
+                'j' => {
+                    tx_action.send(AppAction::SelectNext).await.ok();
+                }
+                'k' => {
+                    tx_action.send(AppAction::SelectPrevious).await.ok();
+                }
+                ':' => {
+                    tx_action.send(AppAction::SelectEmoji).await.ok();
+                }
+                _ => {}
+            },
+            InputMode::Insert => match &mut state.clone().state {
+                AppState::EmojiSelection(channel_id) => {
+                    state.input.push(c);
+                    if c == ' ' {
+                        state.state = AppState::Chatting(channel_id.clone());
+                        state.emoji_filter.clear();
+                    } else {
+                        state.emoji_filter.push(c);
+                    }
+                    state.selection_index = 0;
+                }
+                _ => {
+                    state.input.push(c);
+                }
+            },
         },
         AppAction::SelectEmoji => {
             if let AppState::Chatting(channel_id) = &mut state.clone().state {

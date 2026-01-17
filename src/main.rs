@@ -1,6 +1,7 @@
 use std::{env, io, path::PathBuf, process, sync::Arc};
 
 use crossterm::{
+    cursor::SetCursorStyle,
     execute,
     terminal::{EnterAlternateScreen, enable_raw_mode},
 };
@@ -82,6 +83,12 @@ pub enum AppAction {
     Tick,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum InputMode {
+    Normal,
+    Insert,
+}
+
 #[derive(Debug, Clone)]
 pub struct App {
     api_client: ApiClient,
@@ -100,6 +107,7 @@ pub struct App {
     emoji_filter: String,
     tick_count: usize,
     context: Option<PermissionContext>,
+    mode: InputMode,
 }
 
 impl App {
@@ -189,6 +197,7 @@ async fn run_app(token: String) -> Result<(), Error> {
         emoji_filter: String::new(),
         tick_count: 0,
         context: None,
+        mode: InputMode::Normal,
     }));
 
     let (tx_action, mut rx_action) = mpsc::channel::<AppAction>(32);
@@ -315,6 +324,15 @@ async fn run_app(token: String) -> Result<(), Error> {
                     draw_ui(f, &mut state_guard);
                 })
                 .unwrap();
+
+            match state_guard.mode {
+                InputMode::Normal => {
+                    execute!(io::stdout(), SetCursorStyle::BlinkingBlock).ok();
+                }
+                InputMode::Insert => {
+                    execute!(io::stdout(), SetCursorStyle::BlinkingBar).ok();
+                }
+            }
         }
         if let Some(action) = rx_action.recv().await {
             let state = app_state.lock().await;

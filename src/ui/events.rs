@@ -587,6 +587,20 @@ pub async fn handle_keys_events(
                 'i' => {
                     state.mode = InputMode::Insert;
                 }
+                'I' => {
+                    state.cursor_position = 0;
+                    state.mode = InputMode::Insert;
+                }
+                'a' => {
+                    if state.cursor_position < state.input.len() {
+                        state.cursor_position += 1;
+                    }
+                    state.mode = InputMode::Insert;
+                }
+                'A' => {
+                    state.cursor_position = state.input.len();
+                    state.mode = InputMode::Insert;
+                }
                 'j' => {
                     tx_action.send(AppAction::SelectNext).await.ok();
                 }

@@ -38,10 +38,12 @@ impl Default for VimState {
     }
 }
 
-fn clamp_cursor(state: &mut MutexGuard<'_, App>) {
+pub fn clamp_cursor(state: &mut MutexGuard<'_, App>) {
     let len = state.input.len();
-    if state.cursor_position > len {
-        state.cursor_position = len;
+    if len == 0 {
+        state.cursor_position = 0;
+    } else if state.cursor_position >= len {
+        state.cursor_position = len - 1;
     }
 }
 
@@ -176,7 +178,7 @@ pub async fn handle_vim_keys(
             }
         }
         'l' => {
-            if state.cursor_position < state.input.len() {
+            if state.cursor_position + 1 < state.input.len() {
                 state.cursor_position += 1;
             }
         }
@@ -218,6 +220,13 @@ pub async fn handle_vim_keys(
                     vim_state.operator = Some(VimOperator::Delete);
                     vim_state.last_action_time = Instant::now();
                 }
+            }
+        }
+        'x' => {
+            let pos = state.cursor_position;
+            if pos < state.input.len() {
+                state.input.remove(pos);
+                clamp_cursor(&mut state);
             }
         }
         ':' => {

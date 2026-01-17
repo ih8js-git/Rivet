@@ -2,6 +2,7 @@ use std::{env, io, path::PathBuf, process, sync::Arc, time::Duration};
 
 use crossterm::{
     cursor::SetCursorStyle,
+    event::EnableBracketedPaste,
     execute,
     terminal::{EnterAlternateScreen, enable_raw_mode},
 };
@@ -80,6 +81,7 @@ pub enum AppAction {
     TransitionToLoading(Window),
     EndLoading,
     SelectEmoji,
+    Paste(String),
     Tick,
 }
 
@@ -177,7 +179,7 @@ impl App {
 async fn run_app(token: String, vim_mode: bool) -> Result<(), Error> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen)?;
+    execute!(stdout, EnterAlternateScreen, EnableBracketedPaste)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 

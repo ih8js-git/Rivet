@@ -23,37 +23,46 @@ pub async fn handle_input_events(
             }
 
             _ = time::sleep(Duration::from_millis(50)) => {
-                if event::poll(Duration::from_millis(0))?
-                    && let event::Event::Key(key) = event::read()? && key.kind == KeyEventKind::Press {
-                        if key.code == KeyCode::Char('c') && key.modifiers.contains(event::KeyModifiers::CONTROL) {
-                            tx.send(AppAction::SigInt).await.ok();
-                        } else {
-                            match key.code {
-                                KeyCode::Esc => {
-                                    tx.send(AppAction::InputEscape).await.ok();
+                if event::poll(Duration::from_millis(0))? {
+                    match event::read()? {
+                        event::Event::Key(key) => {
+                            if key.kind == KeyEventKind::Press {
+                                if key.code == KeyCode::Char('c') && key.modifiers.contains(event::KeyModifiers::CONTROL) {
+                                    tx.send(AppAction::SigInt).await.ok();
+                                } else {
+                                    match key.code {
+                                        KeyCode::Esc => {
+                                            tx.send(AppAction::InputEscape).await.ok();
+                                        }
+                                        KeyCode::Enter => {
+                                            tx.send(AppAction::InputSubmit).await.ok();
+                                        }
+                                        KeyCode::Backspace => {
+                                            tx.send(AppAction::InputBackspace).await.ok();
+                                        }
+                                        KeyCode::Up => {
+                                            tx.send(AppAction::SelectPrevious).await.ok();
+                                        }
+                                        KeyCode::Down => {
+                                            tx.send(AppAction::SelectNext).await.ok();
+                                        }
+                                        KeyCode::Char(c) => {
+                                            match c {
+                                                ':' => tx.send(AppAction::SelectEmoji).await.ok(),
+                                                c => tx.send(AppAction::InputChar(c)).await.ok(),
+                                            };
+                                        }
+                                        _ => {}
+                                    }
                                 }
-                                KeyCode::Enter => {
-                                    tx.send(AppAction::InputSubmit).await.ok();
-                                }
-                                KeyCode::Backspace => {
-                                    tx.send(AppAction::InputBackspace).await.ok();
-                                }
-                                KeyCode::Up => {
-                                    tx.send(AppAction::SelectPrevious).await.ok();
-                                }
-                                KeyCode::Down => {
-                                    tx.send(AppAction::SelectNext).await.ok();
-                                }
-                                KeyCode::Char(c) => {
-                                    match c {
-                                        ':' => tx.send(AppAction::SelectEmoji).await.ok(),
-                                        c => tx.send(AppAction::InputChar(c)).await.ok(),
-                                    };
-                                }
-                                _ => {}
                             }
                         }
+                        event::Event::Paste(s) => {
+                            tx.send(AppAction::Paste(s)).await.ok();
+                        }
+                        _ => {}
                     }
+                }
             }
         }
     }
@@ -483,6 +492,10 @@ pub async fn handle_keys_events(
                 // In standard mode, Esc should navigate back or quit, not switch input modes
             } else if state.mode == InputMode::Insert {
                 state.mode = InputMode::Normal;
+                if state.cursor_position > 0 {
+                    state.cursor_position -= 1;
+                }
+                vim::clamp_cursor(&mut state);
                 return None;
             }
             match &state.state {
@@ -525,6 +538,15 @@ pub async fn handle_keys_events(
                         .ok();
                 }
             }
+        }
+        AppAction::Paste(text) => {
+            // Always insert text at cursor position, effectively treating it as insert mode operation
+            // but without necessarily switching mode if we want to be strict.
+            // However, standard behavior usually implies switching to insert or just inserting.
+            // Let's just insert.
+            let pos = state.cursor_position;
+            state.input.insert_str(pos, &text);
+            state.cursor_position += text.chars().count();
         }
         AppAction::InputChar(c) => {
             if !state.vim_mode {

@@ -1,6 +1,8 @@
-use std::{env, io, path::PathBuf, process, sync::Arc};
+use std::{env, io, path::PathBuf, process, sync::Arc, time::Duration};
 
 use crossterm::{
+    cursor::SetCursorStyle,
+    event::EnableBracketedPaste,
     execute,
     terminal::{EnterAlternateScreen, enable_raw_mode},
 };
@@ -12,13 +14,13 @@ use tokio::{
         mpsc::{self},
     },
     task::JoinHandle,
-    time::{self, Duration},
+    time::{self},
 };
 
 use crate::{
     api::{ApiClient, Channel, Emoji, Guild, Message, channel::PermissionContext, dm::DM},
     signals::{restore_terminal, setup_ctrlc_handler},
-    ui::{draw_ui, handle_input_events, handle_keys_events},
+    ui::{draw_ui, handle_input_events, handle_keys_events, vim::VimState},
 };
 
 mod api;
@@ -79,7 +81,14 @@ pub enum AppAction {
     TransitionToLoading(Window),
     EndLoading,
     SelectEmoji,
+    Paste(String),
     Tick,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum InputMode {
+    Normal,
+    Insert,
 }
 
 #[derive(Debug, Clone)]
@@ -98,8 +107,14 @@ pub struct App {
     terminal_width: usize,
     emoji_map: Vec<(String, String)>,
     emoji_filter: String,
+    /// Byte position where the emoji filter started (position of the ':')
+    emoji_filter_start: Option<usize>,
     tick_count: usize,
     context: Option<PermissionContext>,
+    mode: InputMode,
+    cursor_position: usize,
+    vim_mode: bool,
+    vim_state: Option<VimState>,
 }
 
 impl App {
@@ -163,10 +178,10 @@ impl App {
     }
 }
 
-async fn run_app(token: String) -> Result<(), Error> {
+async fn run_app(token: String, vim_mode: bool) -> Result<(), Error> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen)?;
+    execute!(stdout, EnterAlternateScreen, EnableBracketedPaste)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
@@ -187,8 +202,17 @@ async fn run_app(token: String) -> Result<(), Error> {
         terminal_width: 80,
         emoji_map: App::load_emoji_map(),
         emoji_filter: String::new(),
+        emoji_filter_start: None,
         tick_count: 0,
         context: None,
+        mode: InputMode::Normal,
+        cursor_position: 0,
+        vim_mode,
+        vim_state: if vim_mode {
+            Some(VimState::default())
+        } else {
+            None
+        },
     }));
 
     let (tx_action, mut rx_action) = mpsc::channel::<AppAction>(32);
@@ -315,6 +339,19 @@ async fn run_app(token: String) -> Result<(), Error> {
                     draw_ui(f, &mut state_guard);
                 })
                 .unwrap();
+
+            if !state_guard.vim_mode {
+                execute!(io::stdout(), SetCursorStyle::BlinkingBar).ok();
+            } else {
+                match state_guard.mode {
+                    InputMode::Normal => {
+                        execute!(io::stdout(), SetCursorStyle::BlinkingBlock).ok();
+                    }
+                    InputMode::Insert => {
+                        execute!(io::stdout(), SetCursorStyle::BlinkingBar).ok();
+                    }
+                }
+            }
         }
         if let Some(action) = rx_action.recv().await {
             let state = app_state.lock().await;
@@ -348,9 +385,14 @@ async fn main() -> Result<(), Error> {
 
     setup_ctrlc_handler();
 
-    let app_result = run_app(token).await;
+    let vim_mode = env::args().any(|arg| arg == "--vim");
+
+    if let Err(e) = run_app(token, vim_mode).await {
+        restore_terminal();
+        return Err(e);
+    }
 
     restore_terminal();
 
-    app_result
+    Ok(())
 }

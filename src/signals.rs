@@ -2,7 +2,7 @@ use std::sync::Once;
 use std::{io, process};
 
 use crossterm::terminal::disable_raw_mode;
-use crossterm::{execute, terminal::LeaveAlternateScreen};
+use crossterm::{event::DisableBracketedPaste, execute, terminal::LeaveAlternateScreen};
 
 static INIT: Once = Once::new();
 
@@ -16,7 +16,7 @@ pub fn restore_terminal() {
         }
 
         let mut stdout = io::stdout();
-        match execute!(stdout, LeaveAlternateScreen) {
+        match execute!(stdout, LeaveAlternateScreen, DisableBracketedPaste) {
             Ok(_) => (),
             Err(e) => eprintln!("Failed to leave alternate screen: {e}"),
         }

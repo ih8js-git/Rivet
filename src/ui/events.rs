@@ -7,9 +7,59 @@ use tokio::{
 };
 
 use crate::{
-    App, AppAction, AppState, KeywordAction, Window,
+    App, AppAction, AppState, InputMode, KeywordAction, Window,
     api::{Channel, DM, Emoji, Guild},
+    ui::vim,
 };
+
+/// Helper function to insert a character at the cursor position.
+/// Handles both emoji selection state and normal input state.
+fn insert_char_at_cursor(state: &mut MutexGuard<'_, App>, c: char) {
+    let current_state = state.state.clone();
+    match current_state {
+        AppState::EmojiSelection(channel_id) => {
+            let pos = state.cursor_position;
+            state.input.insert(pos, c);
+            state.cursor_position += c.len_utf8();
+            if c == ' ' {
+                state.state = AppState::Chatting(channel_id.clone());
+                state.emoji_filter.clear();
+                state.emoji_filter_start = None;
+            } else {
+                // Recompute emoji_filter based on the current input and emoji_filter_start.
+                if let Some(start) = state.emoji_filter_start {
+                    let filter_start = start + ':'.len_utf8();
+                    if state.cursor_position <= start || filter_start > state.input.len() {
+                        state.emoji_filter.clear();
+                    } else {
+                        let end = std::cmp::min(state.cursor_position, state.input.len());
+                        if filter_start <= end {
+                            state.emoji_filter = state.input[filter_start..end].to_string();
+                        } else {
+                            state.emoji_filter.clear();
+                        }
+                    }
+                } else {
+                    state.emoji_filter.clear();
+                }
+
+                if state.emoji_filter.is_empty() {
+                    state.state = AppState::Chatting(channel_id.clone());
+                    state.emoji_filter_start = None;
+                    state.status_message =
+                        "Chatting in channel. Press Enter to send message. Esc to return channels"
+                            .to_string();
+                }
+            }
+            state.selection_index = 0;
+        }
+        _ => {
+            let pos = state.cursor_position;
+            state.input.insert(pos, c);
+            state.cursor_position += c.len_utf8();
+        }
+    }
+}
 
 pub async fn handle_input_events(
     tx: Sender<AppAction>,
@@ -22,37 +72,43 @@ pub async fn handle_input_events(
             }
 
             _ = time::sleep(Duration::from_millis(50)) => {
-                if event::poll(Duration::from_millis(0))?
-                    && let event::Event::Key(key) = event::read()? && key.kind == KeyEventKind::Press {
-                        if key.code == KeyCode::Char('c') && key.modifiers.contains(event::KeyModifiers::CONTROL) {
-                            tx.send(AppAction::SigInt).await.ok();
-                        } else {
-                            match key.code {
-                                KeyCode::Esc => {
-                                    tx.send(AppAction::InputEscape).await.ok();
+                if event::poll(Duration::from_millis(0))? {
+                    match event::read()? {
+                        event::Event::Key(key) => {
+                            if key.kind == KeyEventKind::Press {
+                                if key.code == KeyCode::Char('c') && key.modifiers.contains(event::KeyModifiers::CONTROL) {
+                                    tx.send(AppAction::SigInt).await.ok();
+                                } else {
+                                    match key.code {
+                                        KeyCode::Esc => {
+                                            tx.send(AppAction::InputEscape).await.ok();
+                                        }
+                                        KeyCode::Enter => {
+                                            tx.send(AppAction::InputSubmit).await.ok();
+                                        }
+                                        KeyCode::Backspace => {
+                                            tx.send(AppAction::InputBackspace).await.ok();
+                                        }
+                                        KeyCode::Up => {
+                                            tx.send(AppAction::SelectPrevious).await.ok();
+                                        }
+                                        KeyCode::Down => {
+                                            tx.send(AppAction::SelectNext).await.ok();
+                                        }
+                                        KeyCode::Char(c) => {
+                                            tx.send(AppAction::InputChar(c)).await.ok();
+                                        }
+                                        _ => {}
+                                    }
                                 }
-                                KeyCode::Enter => {
-                                    tx.send(AppAction::InputSubmit).await.ok();
-                                }
-                                KeyCode::Backspace => {
-                                    tx.send(AppAction::InputBackspace).await.ok();
-                                }
-                                KeyCode::Up => {
-                                    tx.send(AppAction::SelectPrevious).await.ok();
-                                }
-                                KeyCode::Down => {
-                                    tx.send(AppAction::SelectNext).await.ok();
-                                }
-                                KeyCode::Char(c) => {
-                                    match c {
-                                        ':' => tx.send(AppAction::SelectEmoji).await.ok(),
-                                        c => tx.send(AppAction::InputChar(c)).await.ok(),
-                                    };
-                                }
-                                _ => {}
                             }
                         }
+                        event::Event::Paste(s) => {
+                            tx.send(AppAction::Paste(s)).await.ok();
+                        }
+                        _ => {}
                     }
+                }
             }
         }
     }
@@ -95,6 +151,7 @@ async fn input_submit(
             let selected_dm_name = selected_dm.recipients[0].username.clone();
 
             state.input = String::new();
+            state.cursor_position = 0;
             state.status_message = format!("Loading messages for {selected_dm_name}...");
 
             tx_action
@@ -224,6 +281,7 @@ async fn input_submit(
                 .ok();
 
             state.input = String::new();
+            state.cursor_position = 0;
             state.status_message = format!("Loading messages for {selected_channel_name}...");
 
             match state
@@ -245,16 +303,23 @@ async fn input_submit(
             tx_action.send(AppAction::EndLoading).await.ok();
         }
         AppState::EmojiSelection(channel_id) => {
+            let start_pos = state.emoji_filter_start?;
+            let end_pos = start_pos + ':'.len_utf8() + state.emoji_filter.len();
+
             if state.selection_index < filtered_unicode.len() {
                 let (_, char) = filtered_unicode[state.selection_index];
 
-                let emoji_len = state.emoji_filter.len();
-                for _ in 0..(emoji_len + 1) {
-                    state.input.pop();
-                }
+                if state.input.is_char_boundary(start_pos) && state.input.is_char_boundary(end_pos)
+                {
+                    state.input.drain(start_pos..end_pos);
 
-                state.input.push_str(char);
-                state.input.push(' ');
+                    state.input.insert_str(start_pos, char);
+                    let mut pos = start_pos + char.len();
+                    state.input.insert(pos, ' ');
+                    pos += ' '.len_utf8();
+
+                    state.cursor_position = pos;
+                }
             } else if state.selection_index < total_filtered_emojis {
                 let custom_index = state.selection_index - filtered_unicode.len();
                 let emoji = filtered_custom[custom_index];
@@ -270,20 +335,25 @@ async fn input_submit(
                     emoji.id
                 );
 
-                let emoji_len = state.emoji_filter.len();
-                for _ in 0..(emoji_len + 1) {
-                    state.input.pop();
-                }
+                if state.input.is_char_boundary(start_pos) && state.input.is_char_boundary(end_pos)
+                {
+                    state.input.drain(start_pos..end_pos);
 
-                state.input.push_str(&emoji_string);
-                state.input.push(' ');
+                    state.input.insert_str(start_pos, &emoji_string);
+                    let mut pos = start_pos + emoji_string.len();
+                    state.input.insert(pos, ' ');
+                    pos += ' '.len_utf8();
+
+                    state.cursor_position = pos;
+                }
             }
 
             state.state = AppState::Chatting(channel_id.clone());
             state.emoji_filter.clear();
+            state.emoji_filter_start = None;
             state.selection_index = 0;
             state.status_message =
-                "Chatting in channel. Press Enter to send message, Esc to retur to channels."
+                "Chatting in channel. Press Enter to send message, Esc to return to channels."
                     .to_string();
         }
         AppState::Chatting(_) => {
@@ -294,6 +364,7 @@ async fn input_submit(
             };
 
             let content = state.input.drain(..).collect::<String>();
+            state.cursor_position = 0;
 
             let message_data = if content.is_empty() || channel_id_clone.is_none() {
                 None
@@ -462,67 +533,98 @@ pub async fn handle_keys_events(
 
     match action {
         AppAction::SigInt => return Some(KeywordAction::Break),
-        AppAction::InputEscape => match &state.state {
-            AppState::Home | AppState::Loading(_) => return Some(KeywordAction::Break),
-            AppState::SelectingDM => {
-                tx_action.send(AppAction::TransitionToHome).await.ok();
+        AppAction::InputEscape => {
+            // In vim mode, Esc switches from Insert to Normal mode and returns early.
+            // In non-vim mode (or vim Normal mode), Esc triggers navigation (handled below).
+            if state.vim_mode && state.mode == InputMode::Insert {
+                state.mode = InputMode::Normal;
+                if let Some(c) = state.input[..state.cursor_position].chars().next_back() {
+                    state.cursor_position -= c.len_utf8();
+                }
+                vim::clamp_cursor(&mut state);
+                return None;
             }
-            AppState::SelectingGuild => {
-                tx_action.send(AppAction::TransitionToHome).await.ok();
-            }
-            AppState::SelectingChannel(_) => {
-                tx_action.send(AppAction::TransitionToGuilds).await.ok();
-            }
-            AppState::Chatting(channel_id) => {
-                let channel = match state.api_client.get_channel(&channel_id.clone()).await {
-                    Ok(c) => c,
-                    Err(e) => {
-                        tx_action.send(AppAction::TransitionToHome).await.ok();
-                        state.status_message = format!("{e}");
-                        return None;
-                    }
-                };
-
-                if channel.channel_type == 1 || channel.channel_type == 3 {
-                    tx_action.send(AppAction::TransitionToDM).await.ok();
-                } else {
-                    match channel.guild_id {
-                        Some(guild_id) => tx_action
-                            .send(AppAction::TransitionToChannels(guild_id.clone()))
-                            .await
-                            .ok(),
-                        None => tx_action.send(AppAction::TransitionToGuilds).await.ok(),
+            // Navigation logic: go back to previous screen or quit
+            match &state.state {
+                AppState::Home | AppState::Loading(_) => return Some(KeywordAction::Break),
+                AppState::SelectingDM => {
+                    tx_action.send(AppAction::TransitionToHome).await.ok();
+                }
+                AppState::SelectingGuild => {
+                    tx_action.send(AppAction::TransitionToHome).await.ok();
+                }
+                AppState::SelectingChannel(_) => {
+                    tx_action.send(AppAction::TransitionToGuilds).await.ok();
+                }
+                AppState::Chatting(channel_id) => {
+                    let channel = match state.api_client.get_channel(&channel_id.clone()).await {
+                        Ok(c) => c,
+                        Err(e) => {
+                            tx_action.send(AppAction::TransitionToHome).await.ok();
+                            state.status_message = format!("{e}");
+                            return None;
+                        }
                     };
+
+                    if channel.channel_type == 1 || channel.channel_type == 3 {
+                        tx_action.send(AppAction::TransitionToDM).await.ok();
+                    } else {
+                        match channel.guild_id {
+                            Some(guild_id) => tx_action
+                                .send(AppAction::TransitionToChannels(guild_id.clone()))
+                                .await
+                                .ok(),
+                            None => tx_action.send(AppAction::TransitionToGuilds).await.ok(),
+                        };
+                    }
+                }
+                AppState::EmojiSelection(channel_id) => {
+                    tx_action
+                        .send(AppAction::TransitionToChat(channel_id.clone()))
+                        .await
+                        .ok();
                 }
             }
-            AppState::EmojiSelection(channel_id) => {
-                tx_action
-                    .send(AppAction::TransitionToChat(channel_id.clone()))
-                    .await
-                    .ok();
+        }
+        AppAction::Paste(text) => {
+            // Always insert text at cursor position, effectively treating it as insert mode operation
+            // but without necessarily switching mode if we want to be strict.
+            // However, standard behavior usually implies switching to insert or just inserting.
+            // Let's just insert.
+            let pos = state.cursor_position;
+            state.input.insert_str(pos, &text);
+            state.cursor_position += text.len();
+        }
+        AppAction::InputChar(c) => {
+            if c == ':' && (!state.vim_mode || state.mode == InputMode::Insert) {
+                tx_action.send(AppAction::SelectEmoji).await.ok();
+                return None;
             }
-        },
-        AppAction::InputChar(c) => match &mut state.clone().state {
-            AppState::EmojiSelection(channel_id) => {
-                state.input.push(c);
-                if c == ' ' {
-                    state.state = AppState::Chatting(channel_id.clone());
-                    state.emoji_filter.clear();
-                } else {
-                    state.emoji_filter.push(c);
+
+            if !state.vim_mode {
+                insert_char_at_cursor(&mut state, c);
+            } else {
+                match state.mode {
+                    InputMode::Normal => {
+                        vim::handle_vim_keys(state, c, tx_action).await;
+                    }
+                    InputMode::Insert => {
+                        insert_char_at_cursor(&mut state, c);
+                    }
                 }
-                state.selection_index = 0;
             }
-            _ => {
-                state.input.push(c);
-            }
-        },
+        }
         AppAction::SelectEmoji => {
             if let AppState::Chatting(channel_id) = &mut state.clone().state {
-                let is_start_of_emoji = state.input.ends_with(' ') || state.input.is_empty();
+                let cursor_pos = std::cmp::min(state.cursor_position, state.input.len());
+                let is_start_of_emoji = cursor_pos == 0 || state.input[..cursor_pos].ends_with(' ');
 
                 if is_start_of_emoji {
-                    state.input.push(':');
+                    let pos = state.cursor_position;
+                    // Track where the emoji filter starts (position of the ':')
+                    state.emoji_filter_start = Some(pos);
+                    state.input.insert(pos, ':');
+                    state.cursor_position += ':'.len_utf8();
                     let owned_channel_id = channel_id.clone();
                     state.state = AppState::EmojiSelection(owned_channel_id);
                     state.status_message =
@@ -530,26 +632,73 @@ pub async fn handle_keys_events(
                     state.emoji_filter.clear();
                     state.selection_index = 0;
                 } else {
-                    state.input.push(':');
+                    let pos = state.cursor_position;
+                    state.input.insert(pos, ':');
+                    state.cursor_position += ':'.len_utf8();
                 }
             }
         }
         AppAction::InputBackspace => {
-            match &mut state.clone().state {
+            if state.vim_mode && state.mode == InputMode::Normal {
+                if let Some(c) = state.input[..state.cursor_position].chars().next_back() {
+                    state.cursor_position -= c.len_utf8();
+                }
+                return None;
+            }
+            let current_state = state.state.clone();
+            match current_state {
                 AppState::Chatting(_) => {
-                    state.input.pop();
+                    let pos = state.cursor_position;
+                    if let Some(c) = state.input[..pos].chars().next_back() {
+                        let char_len = c.len_utf8();
+                        state.input.remove(pos - char_len);
+                        state.cursor_position -= char_len;
+                    }
                 }
                 AppState::EmojiSelection(channel_id) => {
-                    state.input.pop();
-                    state.emoji_filter.pop();
-                    if state.emoji_filter.is_empty() {
-                        state.state = AppState::Chatting(channel_id.clone());
-                        state.status_message = "Chatting in channel. Press Enter to send message. Esc to return channels".to_string();
+                    let pos = state.cursor_position;
+                    if let Some(c) = state.input[..pos].chars().next_back() {
+                        let char_len = c.len_utf8();
+                        state.input.remove(pos - char_len);
+                        state.cursor_position -= char_len;
+                        // Recompute emoji_filter based on the current input and emoji_filter_start.
+                        if let Some(start) = state.emoji_filter_start {
+                            // Position just after the ':' that started the emoji filter.
+                            let filter_start = start + ':'.len_utf8();
+                            if state.cursor_position <= start || filter_start > state.input.len() {
+                                // Cursor moved to or before the ':' (or indices are invalid);
+                                // clear the filter as we're no longer within the emoji filter.
+                                state.emoji_filter.clear();
+                            } else {
+                                let end = std::cmp::min(state.cursor_position, state.input.len());
+                                if filter_start <= end {
+                                    state.emoji_filter = state.input[filter_start..end].to_string();
+                                } else {
+                                    state.emoji_filter.clear();
+                                }
+                            }
+                        } else {
+                            // No known start of emoji filter; be conservative and clear it.
+                            state.emoji_filter.clear();
+                        }
+
+                        if state.emoji_filter.is_empty() {
+                            state.state = AppState::Chatting(channel_id.clone());
+                            state.emoji_filter_start = None;
+                            state.status_message =
+                                "Chatting in channel. Press Enter to send message. Esc to return to channels"
+                                    .to_string();
+                        }
+                        state.selection_index = 0;
                     }
-                    state.selection_index = 0;
                 }
                 _ => {
-                    state.input.pop();
+                    let pos = state.cursor_position;
+                    if let Some(c) = state.input[..pos].chars().next_back() {
+                        let char_len = c.len_utf8();
+                        state.input.remove(pos - char_len);
+                        state.cursor_position -= char_len;
+                    }
                 }
             }
         }
@@ -606,6 +755,7 @@ pub async fn handle_keys_events(
         }
         AppAction::TransitionToChannels(guild_id) => {
             state.input = String::new();
+            state.cursor_position = 0;
             state.state = AppState::SelectingChannel(guild_id);
             state.status_message =
                 "Select a server. Use arrows to navigate, Enter to select & Esc to quit"
@@ -613,21 +763,28 @@ pub async fn handle_keys_events(
             state.selection_index = 0;
         }
         AppAction::TransitionToChat(channel_id) => {
-            state.state = AppState::Chatting(channel_id.clone());
-            state.status_message =
-                "Chatting in channel. Press Enter to send message, Esc to retur to channels."
-                    .to_string();
-
+            // Check if we're coming from emoji selection before changing state
             if let AppState::EmojiSelection(_) = &state.state {
-                if state.input.ends_with(':') {
-                    state.input.pop();
+                // Remove the trailing ':' and filter text if canceling emoji selection
+                if let Some(start) = state.emoji_filter_start {
+                    let end = start + ':'.len_utf8() + state.emoji_filter.len();
+                    if state.input.is_char_boundary(start) && state.input.is_char_boundary(end) {
+                        state.input.drain(start..end);
+                        state.cursor_position = start;
+                    }
                 }
                 state.emoji_filter.clear();
+                state.emoji_filter_start = None;
                 state.selection_index = 0;
             }
+            state.state = AppState::Chatting(channel_id.clone());
+            state.status_message =
+                "Chatting in channel. Press Enter to send message, Esc to return to channels."
+                    .to_string();
         }
         AppAction::TransitionToGuilds => {
             state.input = String::new();
+            state.cursor_position = 0;
             state.state = AppState::SelectingGuild;
             state.status_message =
                 "Select a server. Use arrows to navigate, Enter to select & Esc to quit"
@@ -636,6 +793,7 @@ pub async fn handle_keys_events(
         }
         AppAction::TransitionToDM => {
             state.input = String::new();
+            state.cursor_position = 0;
             state.state = AppState::SelectingDM;
             state.status_message =
                 "Select a DM. Use arrows to navigate, Enter to select & Esc to quit".to_string();
@@ -643,6 +801,7 @@ pub async fn handle_keys_events(
         }
         AppAction::TransitionToHome => {
             state.input = String::new();
+            state.cursor_position = 0;
             state.state = AppState::Home;
             state.status_message = "Browse either DMs or Servers. Use arrows to navigate, Enter to select & Esc to quit".to_string();
             state.selection_index = 0;

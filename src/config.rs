@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Config {
     pub version: u8,
+    #[serde(default)]
     pub vim_mode: bool,
     pub emoji_map: Vec<(String, String)>,
 }

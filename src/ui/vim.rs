@@ -1,7 +1,8 @@
 use std::time::Instant;
 use tokio::sync::{MutexGuard, mpsc::Sender};
+use unicode_width::UnicodeWidthStr;
 
-use crate::{App, AppAction, InputMode};
+use crate::{App, AppAction, AppState, InputMode};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum VimOperator {
@@ -249,7 +250,11 @@ pub async fn handle_vim_keys(
             state.mode = InputMode::Insert;
         }
         'I' => {
-            state.cursor_position = 0;
+            let start_of_line = state.input[..state.cursor_position]
+                .rfind('\n')
+                .map(|i| i + 1)
+                .unwrap_or(0);
+            state.cursor_position = start_of_line;
             state.mode = InputMode::Insert;
         }
         'a' => {
@@ -259,14 +264,112 @@ pub async fn handle_vim_keys(
             state.mode = InputMode::Insert;
         }
         'A' => {
-            state.cursor_position = state.input.len();
+            let end_of_line = state.input[state.cursor_position..]
+                .find('\n')
+                .map(|i| state.cursor_position + i)
+                .unwrap_or(state.input.len());
+            state.cursor_position = end_of_line;
+            state.mode = InputMode::Insert;
+        }
+        'O' => {
+            let current_line_start = state.input[..state.cursor_position]
+                .rfind('\n')
+                .map(|i| i + 1)
+                .unwrap_or(0);
+            state.input.insert(current_line_start, '\n');
+            state.cursor_position = current_line_start;
+            state.mode = InputMode::Insert;
+        }
+        'o' => {
+            let next_line_start = state.input[state.cursor_position..]
+                .find('\n')
+                .map(|i| state.cursor_position + i + 1)
+                .unwrap_or(state.input.len());
+
+            if next_line_start < state.input.len() {
+                state.input.insert(next_line_start, '\n');
+                state.cursor_position = next_line_start;
+            } else {
+                state.input.push('\n');
+                state.cursor_position = next_line_start + 1;
+            }
+
             state.mode = InputMode::Insert;
         }
         'j' => {
-            tx_action.send(AppAction::SelectNext).await.ok();
+            if let AppState::Chatting(_) = &state.state {
+                let current_pos = state.cursor_position;
+                let current_line_start = state.input[..current_pos]
+                    .rfind('\n')
+                    .map(|i| i + 1)
+                    .unwrap_or(0);
+                let current_column_width =
+                    UnicodeWidthStr::width(&state.input[current_line_start..current_pos]);
+
+                if let Some(newline_offset) = state.input[current_pos..].find('\n') {
+                    let next_line_start = current_pos + newline_offset + 1;
+                    if next_line_start < state.input.len() {
+                        let next_line_end = state.input[next_line_start..]
+                            .find('\n')
+                            .map(|i| next_line_start + i)
+                            .unwrap_or(state.input.len());
+                        let next_line_str = &state.input[next_line_start..next_line_end];
+
+                        let mut target_offset = 0;
+                        let mut current_width = 0;
+                        for c in next_line_str.chars() {
+                            let w = UnicodeWidthStr::width(c.to_string().as_str());
+                            if current_width + w > current_column_width {
+                                break;
+                            }
+                            current_width += w;
+                            target_offset += c.len_utf8();
+                        }
+                        state.cursor_position = next_line_start + target_offset;
+                        clamp_cursor(&mut state);
+                    }
+                }
+            } else {
+                tx_action.send(AppAction::SelectNext).await.ok();
+            }
         }
         'k' => {
-            tx_action.send(AppAction::SelectPrevious).await.ok();
+            if let AppState::Chatting(_) = state.state {
+                let current_pos = state.cursor_position;
+                let current_column_width = {
+                    let current_line_start = state.input[..current_pos]
+                        .rfind('\n')
+                        .map(|i| i + 1)
+                        .unwrap_or(0);
+                    UnicodeWidthStr::width(&state.input[current_line_start..current_pos])
+                };
+
+                let input_before = &state.input[..current_pos];
+
+                if let Some(last_newline) = input_before.rfind('\n') {
+                    let prev_line_start = state.input[..last_newline]
+                        .rfind('\n')
+                        .map(|i| i + 1)
+                        .unwrap_or(0);
+                    let prev_line_end = last_newline;
+                    let prev_line_str = &state.input[prev_line_start..prev_line_end];
+
+                    let mut target_offset = 0;
+                    let mut current_width = 0;
+                    for c in prev_line_str.chars() {
+                        let w = UnicodeWidthStr::width(c.to_string().as_str());
+                        if current_width + w > current_column_width {
+                            break;
+                        }
+                        current_width += w;
+                        target_offset += c.len_utf8();
+                    }
+                    state.cursor_position = prev_line_start + target_offset;
+                    clamp_cursor(&mut state);
+                }
+            } else {
+                tx_action.send(AppAction::SelectPrevious).await.ok();
+            }
         }
         'h' => {
             if let Some(c) = state.input[..state.cursor_position].chars().next_back() {
@@ -308,9 +411,33 @@ pub async fn handle_vim_keys(
         }
         'd' => {
             if let Some(VimOperator::Delete) = current_operator {
-                // dd case
-                state.input.clear();
-                state.cursor_position = 0;
+                let current_pos = state.cursor_position;
+                let current_line_start = state.input[..current_pos]
+                    .rfind('\n')
+                    .map(|i| i + 1)
+                    .unwrap_or(0);
+
+                if let Some(newline_offset) = state.input[current_pos..].find('\n') {
+                    let next_newline_index = current_pos + newline_offset;
+                    state
+                        .input
+                        .drain(current_line_start..next_newline_index + 1);
+                    state.cursor_position = current_line_start;
+                } else if current_line_start > 0 {
+                    let len = state.input.len();
+                    state.input.drain(current_line_start - 1..len);
+                    let prev_line_start = state.input[..current_line_start - 1]
+                        .rfind('\n')
+                        .map(|i| i + 1)
+                        .unwrap_or(0);
+                    state.cursor_position = prev_line_start;
+                } else {
+                    state.input.clear();
+                    state.cursor_position = 0;
+                }
+
+                clamp_cursor(&mut state);
+
                 if let Some(vim_state) = &mut state.vim_state {
                     vim_state.operator = None;
                 }

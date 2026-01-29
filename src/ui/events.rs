@@ -139,7 +139,11 @@ async fn input_submit(
             let dms: Vec<&DM> = state
                 .dms
                 .iter()
-                .filter(|d| d.get_name().to_lowercase().contains(&state.input))
+                .filter(|d| {
+                    d.get_name()
+                        .to_lowercase()
+                        .contains(&state.input.to_lowercase())
+                })
                 .collect();
 
             if dms.is_empty() {
@@ -163,7 +167,7 @@ async fn input_submit(
             let guilds: Vec<&Guild> = state
                 .guilds
                 .iter()
-                .filter(|g| g.name.to_lowercase().contains(&state.input))
+                .filter(|g| g.name.to_lowercase().contains(&state.input.to_lowercase()))
                 .collect();
 
             if guilds.is_empty() {
@@ -538,7 +542,9 @@ pub async fn handle_keys_events(
             // In non-vim mode (or vim Normal mode), Esc triggers navigation (handled below).
             if state.vim_mode && state.mode == InputMode::Insert {
                 state.mode = InputMode::Normal;
-                if let Some(c) = state.input[..state.cursor_position].chars().next_back() {
+                if let Some(c) = state.input[..state.cursor_position].chars().next_back()
+                    && c != '\n'
+                {
                     state.cursor_position -= c.len_utf8();
                 }
                 vim::clamp_cursor(&mut state);

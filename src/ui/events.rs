@@ -136,14 +136,11 @@ async fn input_submit(
             _ => {}
         },
         AppState::SelectingDM => {
+            let filter_text = state.input.to_lowercase();
             let dms: Vec<&DM> = state
                 .dms
                 .iter()
-                .filter(|d| {
-                    d.get_name()
-                        .to_lowercase()
-                        .contains(&state.input.to_lowercase())
-                })
+                .filter(|d| d.get_name().to_lowercase().contains(&filter_text))
                 .collect();
 
             if dms.is_empty() {

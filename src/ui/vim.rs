@@ -325,10 +325,11 @@ pub async fn handle_vim_keys(
                             current_width += w;
                             target_offset += c.len_utf8();
                         }
-                        if target_offset == next_line_str.len() && target_offset > 0 {
-                            if let Some(last_char) = next_line_str.chars().next_back() {
-                                target_offset -= last_char.len_utf8();
-                            }
+                        if target_offset == next_line_str.len()
+                            && target_offset > 0
+                            && let Some(last_char) = next_line_str.chars().next_back()
+                        {
+                            target_offset -= last_char.len_utf8();
                         }
                         state.cursor_position = next_line_start + target_offset;
                         clamp_cursor(&mut state);
@@ -369,10 +370,11 @@ pub async fn handle_vim_keys(
                         current_width += w;
                         target_offset += c.len_utf8();
                     }
-                    if target_offset == prev_line_str.len() && target_offset > 0 {
-                        if let Some(last_char) = prev_line_str.chars().next_back() {
-                            target_offset -= last_char.len_utf8();
-                        }
+                    if target_offset == prev_line_str.len()
+                        && target_offset > 0
+                        && let Some(last_char) = prev_line_str.chars().next_back()
+                    {
+                        target_offset -= last_char.len_utf8();
                     }
                     state.cursor_position = prev_line_start + target_offset;
                     clamp_cursor(&mut state);
@@ -382,29 +384,29 @@ pub async fn handle_vim_keys(
             }
         }
         'h' => {
-            if let Some(c) = state.input[..state.cursor_position].chars().next_back() {
-                if !c.is_control() || c == '\t' {
-                    state.cursor_position -= c.len_utf8();
-                }
+            if let Some(c) = state.input[..state.cursor_position].chars().next_back()
+                && (!c.is_control() || c == '\t')
+            {
+                state.cursor_position -= c.len_utf8();
             }
         }
         'l' => {
-            if let Some(c) = state.input[state.cursor_position..].chars().next() {
-                if c != '\n' {
-                    let next_pos = state.cursor_position + c.len_utf8();
-                    // Optional: check if next_pos lands on newline and decide whether to step onto it?
-                    // For now, simply blocking movement FROM newline (checked above) prevents wrapping to next line.
-                    // But we also want to maybe stop AT the last char, not ON the newline.
-                    // If we want to emulate vim standard behavior:
-                    // If next char is '\n', we DON'T move onto it?
-                    if let Some(next_c) = state.input[next_pos..].chars().next() {
-                        if next_c != '\n' {
-                            state.cursor_position = next_pos;
-                        }
-                    } else if next_pos < state.input.len() {
-                        // End of file case
+            if let Some(c) = state.input[state.cursor_position..].chars().next()
+                && c != '\n'
+            {
+                let next_pos = state.cursor_position + c.len_utf8();
+                // Optional: check if next_pos lands on newline and decide whether to step onto it?
+                // For now, simply blocking movement FROM newline (checked above) prevents wrapping to next line.
+                // But we also want to maybe stop AT the last char, not ON the newline.
+                // If we want to emulate vim standard behavior:
+                // If next char is '\n', we DON'T move onto it?
+                if let Some(next_c) = state.input[next_pos..].chars().next() {
+                    if next_c != '\n' {
                         state.cursor_position = next_pos;
                     }
+                } else if next_pos < state.input.len() {
+                    // End of file case
+                    state.cursor_position = next_pos;
                 }
             }
         }

@@ -1,6 +1,6 @@
 use std::time::Instant;
 use tokio::sync::{MutexGuard, mpsc::Sender};
-use unicode_width::UnicodeWidthStr;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::{App, AppAction, AppState, InputMode};
 
@@ -318,7 +318,7 @@ pub async fn handle_vim_keys(
                         let mut target_offset = 0;
                         let mut current_width = 0;
                         for c in next_line_str.chars() {
-                            let w = UnicodeWidthStr::width(c.to_string().as_str());
+                            let w = c.width().unwrap_or(0); // Optimization: avoid c.to_string() allocation
                             if current_width + w > current_column_width {
                                 break;
                             }
@@ -357,7 +357,7 @@ pub async fn handle_vim_keys(
                     let mut target_offset = 0;
                     let mut current_width = 0;
                     for c in prev_line_str.chars() {
-                        let w = UnicodeWidthStr::width(c.to_string().as_str());
+                        let w = c.width().unwrap_or(0); // Optimization: avoid c.to_string() allocation
                         if current_width + w > current_column_width {
                             break;
                         }

@@ -545,7 +545,9 @@ pub async fn handle_keys_events(
                 {
                     state.cursor_position -= c.len_utf8();
                 }
-                vim::clamp_cursor(&mut state);
+                if !(state.cursor_position == state.input.len() && state.input.ends_with('\n')) {
+                    vim::clamp_cursor(&mut state);
+                }
                 return None;
             }
             // Navigation logic: go back to previous screen or quit

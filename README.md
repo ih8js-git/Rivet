@@ -1,4 +1,4 @@
-# Rivet
+# Rivet - Terminal UI Discord client.
 
 > A terminal UI Discord client written in Rust.
 

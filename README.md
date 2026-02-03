@@ -23,14 +23,12 @@
 
 ## About
 
-> [!NOTE]
-> A Terminal UI Discord Client in Rust.
+Rivet is a terminal UI Discord client written in Rust.
 
-> [!TIP]
-> Having [NerdFonts](https://www.nerdfonts.com/) installed provides a better experiences with icons.
+For best visuals, install  [NerdFonts](https://www.nerdfonts.com/)
 
 ### Terms of Service Notice
->
+
 > [!WARNING]
 > Under no circumstances should you use a Discord User Token (also known as a self-bot token) with this software or any associated tools.
 

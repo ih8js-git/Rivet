@@ -1,3 +1,7 @@
+# Rivet - Terminal UI Discord client
+
+![Chat Example](./readme/Rivet.png)
+
 <p align="center">
   <a href="https://aur.archlinux.org/packages/rivetui">
     <img src="https://img.shields.io/aur/version/rivetui?style=for-the-badge&logo=Arch-Linux&logoColor=white&color=1793D1"></a>
@@ -17,53 +21,28 @@
     <img src="https://img.shields.io/github/actions/workflow/status/YetAnotherMechanicusEnjoyer/Rivet/bin.yml?style=for-the-badge&logo=github-actions&logoColor=white&color=2088FF&label=Binaries"></a>
 </p>
 
-# Rivet
-
-<img src="./readme/Rivet.png" alt="Chat Exemple">
-
-## Table of Content
-
-- [About](#about)
-  - [Terms of Service Notice](#terms-of-service-notice)
-- [Installation (AUR)](#installation-aur)
-- [Installation (Binaries)](#installation-binaries)
-- [Installation (Cargo)](#installation-cargo)
-  - [Dependencies](#dependencies)
-  - [Compilation from crates.io](#compilation-from-cratesio)
-  - [Compilation from source](#compilation-from-source)
-- [Initialization](#initialization)
-- [Usage](#usage)
-- [Licence](#licence)
-
 ## About
 
-> [!NOTE]
-> A Terminal UI Discord Client in Rust.
+Rivet is a terminal UI Discord client written in Rust.
 
-> [!TIP]
-> Having [NerdFonts](https://www.nerdfonts.com/) installed provides a better experiences with icons.
+For best visuals, install  [NerdFonts](https://www.nerdfonts.com/)
 
 ### Terms of Service Notice
->
+
 > [!WARNING]
 > Under no circumstances should you use a Discord User Token (also known as a self-bot token) with this software or any associated tools.
 
-Discord's [Terms of Service (ToS)](https://discord.com/terms) explicitly and strictly prohibit the use of User Tokens for programmatic access or self-botting. Violation of these terms can lead to permanent termination of your Discord account.
+Discord's [Terms of Service (ToS)](https://discord.com/terms) explicitly prohibits the use of User Tokens for programmatic access or self-botting. Violation of these terms can lead to permanent termination of your Discord account.
 
-> - **Do not use self-bots or user-bots.** Each account must be associated with a human, not a bot.
-> Self-bots put strain on Discord’s infrastructure and our ability to run our services. For more information, you can read our Developer Policies [here](https://discord.com/developers/docs/policy).
+> **Do not use self-bots or user-bots.** Each account must be associated with a human, not a bot. Self-bots put strain on Discord’s infrastructure and our ability to run our services. For more information, you can read our Developer Policies [here](https://discord.com/developers/docs/policy).
 
-The developers, contributors, and maintainers of this repository disclaim all liability and responsibility for any and all consequences that may arise from a user's decision to violate Discord's Terms of Service.
+The developers, contibutors, and maintainers are not responsible for any consequences resulting from a user's violation of Discord's Terms of Service. You (the user) assumes all risk if you choose to ignore Discord's policies.
 
-> [!CAUTION]
-> We do not encourage, endorse, or support the use of User Tokens. 😉
->
-> The user assumes all risk for any account actions, bans, or penalties issued by Discord due to improper use of this software.
+## Installation
 
-## Installation ([AUR](https://aur.archlinux.org/packages/rivetui))
+### Arch Linux ([AUR](https://aur.archlinux.org/packages/rivetui))
 
-> [!IMPORTANT]
-> Make sure to have [YaY](https://github.com/Jguer/yay) installed.
+Requires [YaY](https://github.com/Jguer/yay)
 
 ```bash
 yay -S rivetui
@@ -71,31 +50,23 @@ yay -S rivetui
 yay -S rivetui-git
 ```
 
-## Installation (Binaries)
+### Binaries
 
-> [!NOTE]
-> Download the binaries from the [releases](https://github.com/YetAnotherMechanicusEnjoyer/Rivet/releases/)
+Download prebuilt binaries from: [releases](https://github.com/YetAnotherMechanicusEnjoyer/Rivet/releases/)
 
-## Installation ([Cargo](https://doc.rust-lang.org/cargo/))
+### [Cargo](https://doc.rust-lang.org/cargo/)
 
-### Dependencies
+Requires [Rust](https://www.rust-lang.org/tools/install) 
 
-> [!IMPORTANT]
-> Make sure to have [Rust](https://www.rust-lang.org/tools/install) installed.
+Make sure that `~/.cargo/bin` is in your PATH env variable.
 
-### Compilation from [crates.io](https://crates.io/crates/rivetui)
-
-> [!IMPORTANT]
-> Make sure that `~/.cargo/bin` is in your PATH env variable.
+#### With [crates.io](https://crates.io/crates/rivetui)
 
 ```bash
 cargo install rivetui
 ```
 
-### Compilation from source
-
-> [!NOTE]
-> Clone the repo somewhere and compile the program.
+### From Source
 
 ```bash
 git clone https://github.com/YetAnotherMechanicusEnjoyer/Rivet
@@ -103,34 +74,30 @@ cd Rivet/
 cargo build --release
 ```
 
-> [!TIP]
-> Either execute the binary `./target/release/rivetui` or put it inside a directory included in your PATH env variable.
+Run:
 
-## Initialization
+```bash
+./target/release/rivetui
+```
 
-> [!NOTE]
-> Either make a `.env` file at the root of the repository that contains the `DISCORD_TOKEN` variable, save it in your shell env or write it with the command.
+## Configuration
+Set your Discord token using one of the following:
 
-> [!TIP]
-> Exemple of a `.env` file :
-
+### .env file
 ```env
 DISCORD_TOKEN="your-token-here"
 ```
 
-> [!TIP]
-> Exemple of a shell env variable :
-
-```env
+### Shell
+```bash
 export DISCORD_TOKEN="your-token-here"
 ```
 
-> [!TIP]
-> Exemple of a command-line env variable :
-
-```env
+### Inline
+```bash
 DISCORD_TOKEN="your-token-here" rivetui
 ```
+
 
 ## Usage
 

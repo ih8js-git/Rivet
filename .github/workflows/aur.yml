@@ -17,8 +17,8 @@ jobs:
     strategy:
       matrix:
         include:
-          - pkgname: rivetui
-          - pkgname: rivetui-git
+          - pkgname: vimcord
+          - pkgname: vimcord-git
 
     steps:
       - name: Setup SSH keys

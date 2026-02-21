@@ -731,12 +731,12 @@ pub async fn handle_keys_events(
                 None
             };
 
-            if let Some(channel_id) = active_channel_id {
-                if let Some(newest_msg) = new_messages.iter().max_by_key(|m| &m.id) {
-                    state
-                        .last_message_ids
-                        .insert(channel_id, newest_msg.id.clone());
-                }
+            if let Some(channel_id) = active_channel_id
+                && let Some(newest_msg) = new_messages.iter().max_by_key(|m| &m.id)
+            {
+                state
+                    .last_message_ids
+                    .insert(channel_id, newest_msg.id.clone());
             }
             state.messages = new_messages;
         }

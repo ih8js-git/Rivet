@@ -315,47 +315,41 @@ async fn run_app(token: String, config: config::Config) -> Result<(), Error> {
 
                 _ = background_interval.tick() => {
                     // Fetch DMs to get the latest last_message_id for each
-                    match api_client_clone.get_dms().await {
-                        Ok(dms) => {
-                            let mut dms_to_fetch = Vec::new();
+                    if let Ok(dms) = api_client_clone.get_dms().await {
+                        let mut dms_to_fetch = Vec::new();
 
-                            {
-                                let state = background_state.lock().await;
+                        {
+                            let state = background_state.lock().await;
 
-                                for dm in dms {
-                                    if let Some(new_last_id) = &dm.last_message_id {
-                                        // Only fetch messages if we know we have a new message
-                                        let should_fetch = match state.last_message_ids.get(&dm.id) {
-                                            Some(tracked_id) => new_last_id > tracked_id,
-                                            None => true,
-                                        };
+                            for dm in dms {
+                                if let Some(new_last_id) = &dm.last_message_id {
+                                    // Only fetch messages if we know we have a new message
+                                    let should_fetch = match state.last_message_ids.get(&dm.id) {
+                                        Some(tracked_id) => new_last_id > tracked_id,
+                                        None => true,
+                                    };
 
-                                        if should_fetch {
-                                            dms_to_fetch.push(dm.id.clone());
-                                        }
+                                    if should_fetch {
+                                        dms_to_fetch.push(dm.id.clone());
                                     }
-                                }
-                            }
-
-                            for channel_id in dms_to_fetch {
-                                match api_client_clone.get_channel_messages(
-                                    &channel_id,
-                                    None,
-                                    None,
-                                    None,
-                                    Some(5),
-                                ).await {
-                                    Ok(messages) => {
-                                        if let Err(e) = tx_background.send(AppAction::ApiUpdateUnreadMessages(channel_id, messages)).await {
-                                            eprintln!("Failed to send unread message update action: {e}");
-                                            return;
-                                        }
-                                    }
-                                    Err(_) => {}
                                 }
                             }
                         }
-                        Err(_) => {}
+
+                        for channel_id in dms_to_fetch {
+                            if let Ok(messages) = api_client_clone.get_channel_messages(
+                                &channel_id,
+                                None,
+                                None,
+                                None,
+                                Some(5),
+                            ).await
+                                && let Err(e) = tx_background.send(AppAction::ApiUpdateUnreadMessages(channel_id, messages)).await
+                            {
+                                eprintln!("Failed to send unread message update action: {e}");
+                                return;
+                            }
+                        }
                     }
                 }
             }
